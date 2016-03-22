@@ -1,0 +1,16 @@
+[
+{
+  "modid": "alt",
+  "name": "Additional Loot Tables",
+  "description": "Adds a config folder for other mods to easily add to the default Minecraft loot tables",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["DrCyano"],
+  "credits": "Garry Gygax and Larry Arneson",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
