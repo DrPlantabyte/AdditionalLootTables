@@ -114,6 +114,7 @@ public class AdditionalLootTables
 								for(Path file : files){
 									String entry = file.getFileName().toString().toLowerCase(Locale.US).replace(".json","");
 									final StringBuilder json = new StringBuilder();
+									FMLLog.info("%s: Parsing file %s",MODID,file);
 									Files.readAllLines(file, Charset.forName("UTF-8")).stream().forEach((String ln)->json.append(ln).append("\n"));
 
 									LootTable table = (LootTable)gsonObjectConstructor.fromJson(json.toString(), LootTable.class);
