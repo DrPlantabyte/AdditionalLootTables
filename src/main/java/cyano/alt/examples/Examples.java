@@ -88,7 +88,7 @@ public class Examples {
 			"}";
 	private static final String SKELETON_EXAMPLE =
 			"{\n" +
-			"    \"__comment_line1\":\"This example makes skeletons always drop a bow. Note that this pool \",\n" +
+			"    \"__comment_line1\":\"This example makes skeletons always drop bonemeal. Note that this pool \",\n" +
 			"    \"__comment_line3\":\"is added in addition to whatever is specified in the world's loot_tables \",\n" +
 			"    \"__comment_line4\":\"folder (default loot tables are not replaced)\",\n" +
 			"    \"pools\": [\n" +
@@ -97,26 +97,21 @@ public class Examples {
 			"            \"entries\": [\n" +
 			"                {\n" +
 			"                    \"type\": \"item\",\n" +
-			"                    \"name\": \"minecraft:bow\",\n" +
+			"                    \"name\": \"minecraft:dye\",\n" +
+			"                    \"weight\": 1,\n" +
 			"                    \"functions\": [\n" +
 			"                        {\n" +
 			"                            \"function\": \"set_count\",\n" +
-			"                            \"count\": 1\n" +
+			"                            \"count\": {\n" +
+			"                                \"min\": 1,\n" +
+			"                                \"max\": 2\n" +
+			"                            }\n" +
 			"                        },\n" +
 			"                        {\n" +
-			"                            \"function\": \"set_damage\",\n" +
-			"                            \"damage\": {\n" +
-			"                                \"min\":0.1,\n" +
-			"                                \"max\":0.3\n" +
-			"                            }\n" +
+			"                            \"function\": \"set_data\",\n" +
+			"                            \"data\": 15\n" +
 			"                        }\n" +
-			"                    ],\n" +
-			"                    \"weight\": 1\n" +
-			"                }\n" +
-			"            ],\n" +
-			"            \"conditions\": [\n" +
-			"                {\n" +
-			"                    \"condition\": \"killed_by_player\"\n" +
+			"                    ]\n" +
 			"                }\n" +
 			"            ]\n" +
 			"        }\n" +

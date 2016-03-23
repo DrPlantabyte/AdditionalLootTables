@@ -55,6 +55,7 @@ public class WorldLoadEventHandler {
 						AdditionalLootTables.addPoolsToLootTable(lootTable, AdditionalLootTables.additional_loot.get(category).get(entry));
 					} catch (IllegalAccessException | NoSuchFieldException ex) {
 						FMLLog.log(Level.ERROR, ex, "%s: Failed to add additional loot to table %s", MODID, rsrc);
+						if(AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
 					}
 				}
 			}

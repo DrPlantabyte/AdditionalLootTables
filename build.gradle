@@ -30,7 +30,7 @@ allprojects {
 }
 
 
-version = "1.00"
+version = "1.01"
 group= "cyano.alt"
 archivesBaseName = "AdditionalLootTables_1.9"
 

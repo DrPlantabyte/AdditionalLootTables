@@ -47,9 +47,10 @@ public class AdditionalLootTables
 {
 	public static final String NAME = "Additional Loot Tables";
 	public static final String MODID = "alt";
-	public static final String VERSION = "1.0";
+	public static final String VERSION = "1.01";
 
 	public static boolean enabled = true;
+	public static boolean strict_mode = false;
 
 	public static final String loot_folder_name = "additional-loot-tables";
 	public static Path loot_folder = null;
@@ -63,8 +64,11 @@ public class AdditionalLootTables
 		Configuration config = new Configuration(event.getSuggestedConfigurationFile());
 		config.load();
 		enabled = config.getBoolean("enable", "Additional Loot Tables", enabled,
-			"If true, then this mod will look in the config/additional-loot-tables folder for loot_table json files and merge \n" +
-					"them with the existing loot tables");
+				"If true, then this mod will look in the config/additional-loot-tables folder for loot_table json files and merge \n" +
+						"them with the existing loot tables");
+		strict_mode = config.getBoolean("strict", "Additional Loot Tables", strict_mode,
+				"If true, then any errors while parsing/loading loot tables will crash the game. If false, then there will be an \n" +
+						"error message in the log but no crash.");
 
 		config.save();
 
@@ -77,6 +81,7 @@ public class AdditionalLootTables
 			}
 		}catch(IOException ex){
 			FMLLog.log(Level.ERROR,ex,"%s: Failed to extract example additional loot tables",MODID);
+			if(AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
 		}
 	}
 	@EventHandler
@@ -123,10 +128,12 @@ public class AdditionalLootTables
 							}
 						} catch(IOException | IllegalAccessException | NoSuchFieldException ex){
 							FMLLog.log(Level.ERROR,ex,"%s: Error parsing loot file.",MODID);
+							if(AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
 						}
 					});
 		} catch (IOException ex) {
-			throw new RuntimeException("Cannot access additioanl loot tables folder!",ex);
+			FMLLog.log(Level.ERROR,ex,"%s: Cannot access additioanl loot tables folder!",MODID);
+			if(AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
 		}
 		//
 	}
