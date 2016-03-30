@@ -38,8 +38,8 @@ public class WorldLoadEventHandler {
 	@SubscribeEvent(priority= EventPriority.NORMAL)
 	public void onWorldLoad(WorldEvent.Load event){
 		// merge loot table pools
-		if(event.world == null || event.world.isRemote) return;
-		LootTableManager lootManager = event.world.getLootTableManager();
+		if(event.getWorld() == null || event.getWorld().isRemote) return;
+		LootTableManager lootManager = event.getWorld().getLootTableManager();
 		if (lootManager == null) {
 			FMLLog.severe("%s: LootTableMAnager is null!", MODID);
 		}
