@@ -22,7 +22,6 @@ plugins {
 */
 
 
-
 allprojects {
     apply plugin: 'java'
     sourceCompatibility = 1.8
@@ -38,7 +37,7 @@ archivesBaseName = "AdditionalLootTables_1.9"
 minecraft {
 	version = "1.9-12.16.1.1907"
 	runDir = "run"
-	mappings = "snapshot_20160425"
+	mappings = "snapshot_20160419"
 }
 
 
