@@ -30,13 +30,13 @@ allprojects {
 }
 
 
-version = "1.02"
+version = "1.03"
 group= "cyano.alt"
 archivesBaseName = "AdditionalLootTables_1.9"
 
 
 minecraft {
-	version = "1.9-12.16.0.1865-1.9"
+	version = "1.9-12.16.1.1907"
 	runDir = "run"
 	mappings = "snapshot_20160419"
 }

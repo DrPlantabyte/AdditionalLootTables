@@ -16,12 +16,21 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  */
 package cyano.alt;
 
+import com.google.common.collect.Queues;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.grack.nanojson.JsonArray;
+import com.grack.nanojson.JsonObject;
+import com.grack.nanojson.JsonParser;
+import com.grack.nanojson.JsonWriter;
 import cyano.alt.examples.Examples;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.storage.loot.*;
 import net.minecraft.world.storage.loot.conditions.LootCondition;
+import net.minecraft.world.storage.loot.conditions.LootConditionManager;
 import net.minecraft.world.storage.loot.functions.LootFunction;
+import net.minecraft.world.storage.loot.functions.LootFunctionManager;
+import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.fml.common.FMLLog;
@@ -30,10 +39,14 @@ import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.eventhandler.EventBus;
 import org.apache.logging.log4j.Level;
 
 import java.io.IOException;
+import java.io.StringReader;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -42,19 +55,21 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
+
 @Mod(modid = AdditionalLootTables.MODID, version = AdditionalLootTables.VERSION, name= AdditionalLootTables.NAME)
 public class AdditionalLootTables
 {
 	public static final String NAME = "Additional Loot Tables";
 	public static final String MODID = "alt";
-	public static final String VERSION = "1.02";
+	public static final String VERSION = "1.03";
 
 	public static boolean enabled = true;
 	public static boolean strict_mode = false;
 
 	public static final String loot_folder_name = "additional-loot-tables";
 	public static Path loot_folder = null;
-	public static final Map<String,Map<String,List<LootPool>>> additional_loot = new HashMap<>(); // <category,<table name,list of jsons>> ex: <"chests",<"igloo_chest",list>>
+	private static Map<String,Map<String,List<LootPool>>> additional_loot = null; // <category,<table name,list of jsons>> ex: <"chests",<"igloo_chest",list>>
 	
 	@EventHandler
 	public void preInit(FMLPreInitializationEvent event)
@@ -88,88 +103,169 @@ public class AdditionalLootTables
 	public void init(FMLInitializationEvent event)
 	{
 		// register event handler
-		MinecraftForge.EVENT_BUS.register(new WorldLoadEventHandler());
+		EVENT_BUS.register(new ALTEventHandler());
 	}
 	@EventHandler
-	public void postInit(FMLPostInitializationEvent event)
-	{
-		FMLLog.info("%s: Parsing additional loot tables",MODID);
-		final Gson gsonObjectConstructor = (new GsonBuilder())
-				.registerTypeAdapter(RandomValueRange.class, new RandomValueRange.Serializer())
-				.registerTypeAdapter(LootPool.class, new net.minecraft.world.storage.loot.LootPool.Serializer())
-				.registerTypeAdapter(LootTable.class, new net.minecraft.world.storage.loot.LootTable.Serializer())
-				.registerTypeHierarchyAdapter(LootEntry.class, new net.minecraft.world.storage.loot.LootEntry.Serializer())
-				.registerTypeHierarchyAdapter(LootFunction.class, new net.minecraft.world.storage.loot.functions.LootFunctionManager.Serializer())
-				.registerTypeHierarchyAdapter(LootCondition.class, new net.minecraft.world.storage.loot.conditions.LootConditionManager.Serializer())
-				.registerTypeHierarchyAdapter(LootContext.EntityTarget.class, new net.minecraft.world.storage.loot.LootContext.EntityTarget.Serializer())
-				.create();
-		try {
-			Files.list(loot_folder).filter((Path f)->Files.isDirectory(f))
-					.forEach((Path domain)->{
-						try {
-							List<Path> types = Files.list(domain).filter((Path f) -> Files.isDirectory(f)).collect(Collectors.toList());
-							for(Path typeDir : types){
-								String category = typeDir.getFileName().toString();
-								List<Path> files = Files.list(typeDir).filter((Path f) -> Files.isRegularFile(f) && f.toString().toLowerCase(Locale.US).endsWith(".json")).collect(Collectors.toList());
-								for(Path file : files){
-									String entry = file.getFileName().toString().toLowerCase(Locale.US).replace(".json","");
-									final StringBuilder json = new StringBuilder();
-									FMLLog.info("%s: Parsing file %s",MODID,file);
-									Files.readAllLines(file, Charset.forName("UTF-8")).stream().forEach((String ln)->json.append(ln).append("\n"));
-
-									LootTable table = (LootTable)gsonObjectConstructor.fromJson(json.toString(), LootTable.class);
-
-									// if we made it this far, the json file is clean
-									FMLLog.info("%s: Adding additional loot table %s/%s/%s",MODID,domain.getFileName(),category,entry);
-									additional_loot
-											.computeIfAbsent(category,(String key)->new HashMap<>())
-											.computeIfAbsent(entry,(String key)->new ArrayList<>())
-											.addAll(Arrays.asList(getPoolsFromLootTable(table)));
-								}
-							}
-						} catch(IOException | IllegalAccessException | NoSuchFieldException ex){
-							FMLLog.log(Level.ERROR,ex,"%s: Error parsing loot file.",MODID);
-							if(AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
-						}
-					});
-		} catch (IOException ex) {
-			FMLLog.log(Level.ERROR,ex,"%s: Cannot access additioanl loot tables folder!",MODID);
-			if(AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
-		}
-		//
+	public void postInit(FMLPostInitializationEvent event) {
+		getAdditionalLootTables(); // forces parsing of files during initialization
 	}
+
+	/**
+	 * Parses the ALT loot files if they are not already cached and returns the loot tables.
+	 * DO NOT INVOKE BEFORE POST-INIT PHASE!!!
+	 * @return A Map of loot pools where the first level of the map is the category ("chests" or "entities") and
+	 * the second level is the table name (e.g. "village_blacksmith") and the third level is a list of LootPool
+	 * instances.
+	 */
+	public synchronized static Map<String,Map<String,List<LootPool>>> getAdditionalLootTables(){
+		if(additional_loot == null) {
+			additional_loot = new HashMap<>();
+			FMLLog.info("%s: Parsing additional loot tables", MODID);
+			final Gson gsonObjectConstructor = (new GsonBuilder())
+					.registerTypeAdapter(RandomValueRange.class, new RandomValueRange.Serializer())
+					.registerTypeAdapter(LootPool.class, new LootPool.Serializer())
+					.registerTypeAdapter(LootTable.class, new LootTable.Serializer())
+					.registerTypeHierarchyAdapter(LootEntry.class, new LootEntry.Serializer())
+					.registerTypeHierarchyAdapter(LootFunction.class, new LootFunctionManager.Serializer())
+					.registerTypeHierarchyAdapter(LootCondition.class, new LootConditionManager.Serializer())
+					.registerTypeHierarchyAdapter(LootContext.EntityTarget.class, new LootContext.EntityTarget.Serializer())
+					.create();
+			try {
+				Files.list(loot_folder).filter((Path f) -> Files.isDirectory(f))
+						.forEach((Path domain) -> {
+							try {
+								List<Path> types = Files.list(domain).filter((Path f) -> Files.isDirectory(f)).collect(Collectors.toList());
+								for (Path typeDir : types) {
+									String category = typeDir.getFileName().toString();
+									List<Path> files = Files.list(typeDir).filter((Path f) -> Files.isRegularFile(f) && f.toString().toLowerCase(Locale.US).endsWith(".json")).collect(Collectors.toList());
+									for (Path file : files) {
+										String entry = file.getFileName().toString().toLowerCase(Locale.US).replace(".json", "");
+										final StringBuilder jsonStringBuilder = new StringBuilder();
+										FMLLog.info("%s: Parsing file %s", MODID, file);
+										Files.readAllLines(file, Charset.forName("UTF-8")).stream().forEach((String ln) -> jsonStringBuilder.append(ln).append("\n"));
+
+										// Hack-in name info that Forge now wants
+										JsonObject jsonObject = JsonParser.object().from(new StringReader(jsonStringBuilder.toString()));
+										JsonArray pools = jsonObject.getArray("pools");
+										if(pools != null && !pools.isEmpty()){
+											for(int i = 0; i < pools.size(); i++){
+												((JsonObject)pools.get(i)).put("name",domain.getFileName()+"/"+category+"/"
+														+entry+"#"+(i+1));
+											}
+										}
+
+
+										// TODO: check if we can remove hacking on next Forge update (does ForgeHooks.getLootTableContext() or LootTableManager.loadLootTable(...) throw an exception in the absence of a context object? And can you deserialize a LootTable without triggering events?)
+										Object busCache = hackDisableEventBus();
+										pushLootTableContext(category,entry);
+										LootTable table = (LootTable) gsonObjectConstructor.fromJson(
+												JsonWriter.string().object(jsonObject).done(),
+												LootTable.class);
+										popLootTableContext();
+										hackEnableEventBus(busCache);
+
+										// if we made it this far, the json file is clean
+										FMLLog.info("%s: Adding additional loot table %s/%s/%s", MODID, domain.getFileName(), category, entry);
+										additional_loot
+												.computeIfAbsent(category, (String key) -> new HashMap<>())
+												.computeIfAbsent(entry, (String key) -> new ArrayList<>())
+												.addAll(Arrays.asList(getPoolsFromLootTable(table)));
+									}
+								}
+							} catch (IOException | com.google.gson.JsonParseException | com.grack.nanojson.JsonParserException | IllegalAccessException | NoSuchFieldException | NoSuchMethodException | ClassNotFoundException | InstantiationException | InvocationTargetException ex) {
+								FMLLog.log(Level.ERROR, ex, "%s: Error parsing loot file.", MODID);
+								if (AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
+							}
+						});
+			} catch (IOException ex) {
+				FMLLog.log(Level.ERROR, ex, "%s: Cannot access additional loot tables folder!", MODID);
+				if (AdditionalLootTables.strict_mode) throw new RuntimeException(ex);
+			}
+		}
+
+		return additional_loot;
+	}
+
+	private static final void removeFinalModifierFromField(Field f) throws NoSuchFieldException, IllegalAccessException {
+		// Warning: invoking shadow magic
+		if((f.getModifiers() & Modifier.FINAL) == 0) return; // already done
+		Field modifiers = Field.class.getDeclaredField("modifiers");
+		modifiers.setAccessible(true);
+		modifiers.set(f,(int)modifiers.get(f) & ~Modifier.FINAL);
+	}
+
+	private static final String className_LootTableContext = ForgeHooks.class.getCanonicalName()+"$LootTableContext";
+	private static final String fieldName_lootContext = "lootContext";
+	private static final String fieldName_EVENT_BUS = "EVENT_BUS";
+
+	private static Object hackDisableEventBus() throws NoSuchFieldException, IllegalAccessException {
+		Object cache = MinecraftForge.EVENT_BUS;
+		Field busField = MinecraftForge.class.getDeclaredField(fieldName_EVENT_BUS);
+		busField.setAccessible(true);
+		removeFinalModifierFromField(busField);
+		busField.set(null,new EventBus());
+
+		return cache;
+	}
+
+	private static void hackEnableEventBus(Object cache) throws NoSuchFieldException, IllegalAccessException {
+		Field busField = MinecraftForge.class.getDeclaredField(fieldName_EVENT_BUS);
+		busField.setAccessible(true);
+		removeFinalModifierFromField(busField);
+		busField.set(null,cache);
+	}
+
+	private static void popLootTableContext() throws NoSuchFieldException, IllegalAccessException {
+		ThreadLocal<Deque> contextQ = hackLootTableContextDeque();
+		if(contextQ.get() != null){
+			contextQ.get().pop();
+		}
+	}
+
+
+	private static void pushLootTableContext(String category, String entry) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, NoSuchFieldException {
+		ThreadLocal<Deque> contextQ = hackLootTableContextDeque();
+		if(contextQ.get() == null){
+			contextQ.set(Queues.newArrayDeque());
+		}
+		Object ctx = hackNewLootTableContext(new ResourceLocation(category,entry),false);
+		contextQ.get().push(ctx);
+	}
+
+	private static ThreadLocal<Deque> hackLootTableContextDeque() throws IllegalAccessException, NoSuchFieldException {
+		Field variable = ForgeHooks.class.getDeclaredField(fieldName_lootContext);
+		variable.setAccessible(true);
+		return (ThreadLocal<Deque>) variable.get(null);
+	}
+
+	private static Object hackNewLootTableContext(ResourceLocation rsrc, boolean isCustom) throws ClassNotFoundException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
+
+		Class ctxClass = Class.forName(className_LootTableContext);
+		Constructor constructor = ctxClass.getDeclaredConstructor(ResourceLocation.class, boolean.class);
+		constructor.setAccessible(true);
+		Object o = constructor.newInstance(rsrc,isCustom);
+		return o;
+	}
+
 
 	public static LootPool[] getPoolsFromLootTable(LootTable t) throws IllegalAccessException, NoSuchFieldException {
-		// time for black magic
+		// time for shadow magic
 		Field[] vars = LootTable.class.getDeclaredFields();
 		for(Field v : vars){
-			if(v.getType().isArray() && v.getType().getComponentType().isAssignableFrom(LootPool.class)){
+			if(v.getType().isAssignableFrom(List.class)){
 				v.setAccessible(true);
-				return (LootPool[])v.get(t);
+				if( ((List)v.get(t)).isEmpty()
+						|| ((List)v.get(t)).get(0) instanceof LootPool) {
+					return ((List<LootPool>)v.get(t)).toArray(new LootPool[0]);
+				}
 			}
 		}
-		throw new NoSuchFieldException("Could not find LootPool[] field in LootTable");
+		throw new NoSuchFieldException("Could not find List<LootPool> field in LootTable");
 	}
 
-	public static void addPoolsToLootTable(LootTable t, List<LootPool> pools) throws IllegalAccessException, NoSuchFieldException {
-		LootPool[] oldArray = getPoolsFromLootTable(t);
-		List<LootPool> newPools = new ArrayList<>();
-		newPools.addAll(Arrays.asList(oldArray));
-		newPools.addAll(pools);
-		LootPool[] newArray = newPools.toArray(new LootPool[newPools.size()]);
-
-		// time for black magic
-		Field[] vars = LootTable.class.getDeclaredFields();
-		for(Field v : vars){
-			if(v.getType().isArray() && v.getType().getComponentType().isAssignableFrom(LootPool.class)){
-				v.setAccessible(true);
-				Field modField = Field.class.getDeclaredField("modifiers");
-				modField.setAccessible(true);
-				modField.setInt(v, v.getModifiers() & ~Modifier.FINAL);
-				v.set(t,newArray);
-				break;
-			}
-		}
+	@Deprecated
+	public static void addPoolsToLootTable(LootTable t, List<LootPool> pools) {
+		for(LootPool pool : pools) t.addPool(pool);
 	}
 
 }
