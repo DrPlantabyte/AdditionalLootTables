@@ -38,7 +38,7 @@ archivesBaseName = "AdditionalLootTables_1.9"
 minecraft {
 	version = "1.9-12.16.1.1907"
 	runDir = "run"
-	mappings = "snapshot_20160419"
+	mappings = "snapshot_20160425"
 }
 
 
