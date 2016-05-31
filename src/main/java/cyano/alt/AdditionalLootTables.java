@@ -53,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
@@ -62,7 +63,7 @@ public class AdditionalLootTables
 {
 	public static final String NAME = "Additional Loot Tables";
 	public static final String MODID = "alt";
-	public static final String VERSION = "1.04";
+	public static final String VERSION = "1.05";
 
 	public static boolean enabled = true;
 	public static boolean strict_mode = false;
@@ -110,6 +111,7 @@ public class AdditionalLootTables
 		getAdditionalLootTables(); // forces parsing of files during initialization
 	}
 
+	private static final AtomicInteger hashCounter = new AtomicInteger(0);
 	/**
 	 * Parses the ALT loot files if they are not already cached and returns the loot tables.
 	 * DO NOT INVOKE BEFORE POST-INIT PHASE!!!
@@ -151,12 +153,23 @@ public class AdditionalLootTables
 											for(int i = 0; i < pools.size(); i++){
 												((JsonObject)pools.get(i)).put("name",domain.getFileName()+"/"+category+"/"
 														+entry+"#"+(i+1));
+
+												// Damn you, Forge! Why do you require that every single pool and entry be unique?
+												JsonArray entries = ((JsonObject) pools.get(i)).getArray("entries");
+												if(entries != null){
+													for(int e = 0; e < entries.size(); e++){
+														String unique = "_entry_".concat(String.valueOf(hashCounter.incrementAndGet()));
+														((JsonObject)entries.get(e)).put("entryName",unique);
+													}
+												}
 											}
 										}
 
 
 										// TODO: check if we can remove hacking on next Forge update (does ForgeHooks.getLootTableContext() or LootTableManager.loadLootTable(...) throw an exception in the absence of a context object? And can you deserialize a LootTable without triggering events?)
 										Object busCache = hackDisableEventBus();
+										// Damn you, Forge! Why did you inject your hooks into the GSON PARSER?!?!
+										// Now it is impossible to parse a JSON file into a LootTable without triggering an event
 										pushLootTableContext(category,entry);
 										LootTable table = (LootTable) gsonObjectConstructor.fromJson(
 												JsonWriter.string().object(jsonObject).done(),
