@@ -53,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
@@ -110,6 +111,7 @@ public class AdditionalLootTables
 		getAdditionalLootTables(); // forces parsing of files during initialization
 	}
 
+	private static final AtomicInteger hashCounter = new AtomicInteger(0);
 	/**
 	 * Parses the ALT loot files if they are not already cached and returns the loot tables.
 	 * DO NOT INVOKE BEFORE POST-INIT PHASE!!!
@@ -151,6 +153,15 @@ public class AdditionalLootTables
 											for(int i = 0; i < pools.size(); i++){
 												((JsonObject)pools.get(i)).put("name",domain.getFileName()+"/"+category+"/"
 														+entry+"#"+(i+1));
+
+												// Damn you, Forge! Why to you require that every single pool and entry be unique?
+												JsonArray entries = ((JsonObject) pools.get(i)).getArray("entries");
+												if(entries != null){
+													for(int e = 0; e < entries.size(); e++){
+														String unique = "_entry".concat(String.valueOf(hashCounter.incrementAndGet()));
+														((JsonObject)entries.get(e)).put("entryName",unique);
+													}
+												}
 											}
 										}
 
