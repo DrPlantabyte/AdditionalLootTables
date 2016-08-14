@@ -1,16 +1,16 @@
 
 // For those who want the bleeding edge
 buildscript {
-	repositories {
-		jcenter()
-		maven {
-			name = "forge"
-			url = "http://files.minecraftforge.net/maven"
-		}
-	}
-	dependencies {
-		classpath 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
-	}
+    repositories {
+        jcenter()
+        maven {
+            name = "forge"
+            url = "http://files.minecraftforge.net/maven"
+        }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
+    }
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 
@@ -29,13 +29,13 @@ allprojects {
 }
 
 
-version = "1.05"
+version = "1.06"
 group= "cyano.alt"
-archivesBaseName = "AdditionalLootTables_1.9.4"
+archivesBaseName = "AdditionalLootTables_1.10.2"
 
 
 minecraft {
-    version = "1.9.4-12.17.0.1922-1.9.4"
+    version = "1.10.2-12.18.1.2011"
 	runDir = "run"
     mappings = "snapshot_20160518"
 }
