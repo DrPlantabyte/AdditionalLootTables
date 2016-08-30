@@ -1,6 +1,8 @@
 # AdditionalLootTables
 Mod for Minecraft-Forge 1.9 that makes it easier to add custom mod items to loot tables
 
+**This project has moved to https://github.com/MinecraftModDevelopment/AdditionalLootTables**
+
 # How it works
 When this mod is installed, it will create a folder in the **config** folder called **additional-loot-tables**. You (or your mod) can place folders in **additional-loot-tables** that contain loot table definitions.
 
